@@ -1,4 +1,5 @@
 const express = require("express");
+const bcrypt = require("bcrypt");
 const { Todos, User } = require("./db");
 const jwt = require("jsonwebtoken");
 const jwtPrivateKey = "100xDevs";
@@ -13,26 +14,54 @@ app.get("/", (req, res) => {
   });
 });
 
+// Salting and hasing generic normal user given passwords
+
+async function generateHashing(nonHashedPassword) {
+  const hash = await bcrypt.hash(nonHashedPassword, 12);
+  return hash;
+}
+
+async function isValidHash(hashedPassword, hash) {
+  const result = await bcrypt.compare(hashedPassword, hash);
+  return result;
+  // if matches ==> true
+  // if dontMatch ==> false
+}
 // creating user and returning JWt
 app.post("/signup", async (req, res) => {
   try {
     const body = req.body;
-    const isDataStored = await User.create({
+
+    // console.log(`bodyPassword ${body.password}`);
+
+    //    const finalPassword = await bcrypt.hash(body.password, 2);
+    const finalPassword = await generateHashing(body.password);
+    console.log(`Final Passsword is ${finalPassword}`);
+
+    // console.log(`hashed password is ${body.password}`);
+
+    await User.create({
       name: body.name,
       age: body.age,
       email: body.email,
-      password: body.password,
-    });
-    console.log(`Is data stored: ${isDataStored}`);
-    const token = jwt.sign(isDataStored.id, jwtPrivateKey);
-    console.log(`Token is :${token}`);
+      password: finalPassword,
+    }).then((isDataStored) => {
+      console.log(`Is data stored: ${isDataStored}`);
+      const token = jwt.sign(isDataStored.id, jwtPrivateKey);
+      console.log(`Token is :${token}`);
 
-    return res.json({
-      messge: "User Created Sucessfully :)",
+      return res.json({
+        messge: "User Created Sucessfully :)",
+      });
     });
   } catch (err) {
-    console.log(`Error while Signup is ${err}`);
-    return res.json({
+    if (err.errorResponse.code == 11000) {
+      return res.status(403).json({
+        messge: "Email already exists",
+      });
+    }
+    // console.log(`Error while Signup is ${err}`);
+    return res.status(403).json({
       messge: "Something went wrong",
     });
   }
@@ -41,13 +70,19 @@ app.post("/signup", async (req, res) => {
 // Validates user login
 app.post("/signin", async (req, res) => {
   const body = req.body;
-  const doesUserExists = await User.findOne({
-    name: body.name,
-    password: body.password,
-  });
-  console.log(doesUserExists);
 
-  if (doesUserExists) {
+  const doesUserExists = await User.findOne({
+    email: body.email,
+    // password: finalPassword,
+  });
+
+  console.log(doesUserExists);
+  const isValidPassword = await isValidHash(
+    body.password,
+    doesUserExists.password,
+  );
+  console.log(`isValidPassword value is ${isValidPassword}`);
+  if (isValidPassword) {
     const token = jwt.sign(doesUserExists.id, jwtPrivateKey);
     console.log(token);
 
@@ -55,8 +90,8 @@ app.post("/signin", async (req, res) => {
       token: token,
     });
   }
-  return res.json({
-    messge: "oops no user found with the given input",
+  return res.status(401).json({
+    messge: "Unauthorised",
   });
 });
 

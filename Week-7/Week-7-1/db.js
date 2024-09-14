@@ -14,7 +14,10 @@ mongoose
 const userSchema = new mongoose.Schema({
   name: String,
   age: Number,
-  email: String,
+  email: {
+    unique: true,
+    type: String,
+  },
   password: String,
 });
 
@@ -22,6 +25,10 @@ const todosSchema = new mongoose.Schema({
   title: String,
   description: String,
   isCompleted: Boolean,
+  date: {
+    default: new Date().toLocaleTimeString(),
+    type: Date,
+  },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
