@@ -1,5 +1,6 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
+const z = require("zod");
 const { Todos, User } = require("./db");
 const jwt = require("jsonwebtoken");
 const jwtPrivateKey = "100xDevs";
@@ -21,39 +22,62 @@ async function generateHashing(nonHashedPassword) {
   return hash;
 }
 
+// checking if the hash is valid
 async function isValidHash(hashedPassword, hash) {
   const result = await bcrypt.compare(hashedPassword, hash);
   return result;
   // if matches ==> true
   // if dontMatch ==> false
 }
+
+//validating Input of user
+const validateUserInput = z.object({
+  email: z.string().email(),
+  name: z.string(),
+  password: z.string(),
+  age: z.number(),
+});
+
+//validating todoInput
+
+const todosInput = z.object({
+  title: z.string(),
+  description: z.string(),
+  isCompleted: z.boolean(),
+});
 // creating user and returning JWt
 app.post("/signup", async (req, res) => {
   try {
     const body = req.body;
+    const isValidInputs = z.safeParse(body);
+    if (isValidInputs) {
+      // console.log(`bodyPassword ${body.password}`);
 
-    // console.log(`bodyPassword ${body.password}`);
+      //    const finalPassword = await bcrypt.hash(body.password, 2);
+      const finalPassword = await generateHashing(body.password);
+      console.log(`Final Passsword is ${finalPassword}`);
 
-    //    const finalPassword = await bcrypt.hash(body.password, 2);
-    const finalPassword = await generateHashing(body.password);
-    console.log(`Final Passsword is ${finalPassword}`);
+      // console.log(`hashed password is ${body.password}`);
 
-    // console.log(`hashed password is ${body.password}`);
+      await User.create({
+        name: body.name,
+        age: body.age,
+        email: body.email,
+        password: finalPassword,
+      }).then((isDataStored) => {
+        console.log(`Is data stored: ${isDataStored}`);
+        const token = jwt.sign(isDataStored.id, jwtPrivateKey);
+        console.log(`Token is :${token}`);
 
-    await User.create({
-      name: body.name,
-      age: body.age,
-      email: body.email,
-      password: finalPassword,
-    }).then((isDataStored) => {
-      console.log(`Is data stored: ${isDataStored}`);
-      const token = jwt.sign(isDataStored.id, jwtPrivateKey);
-      console.log(`Token is :${token}`);
-
-      return res.json({
-        messge: "User Created Sucessfully :)",
+        return res.json({
+          messge: "User Created Sucessfully :)",
+        });
       });
-    });
+    } else {
+      return res.json({
+        messge: "Invalid Inputs",
+      });
+    }
   } catch (err) {
     if (err.errorResponse.code == 11000) {
       return res.status(403).json({
